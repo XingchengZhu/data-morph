@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
-/* 引入 PrismJS 的 One Dark 主题样式 */
-@import "prismjs/themes/prism-one-dark.css";
+/* ✅ 修复：换成 prismjs 自带的 Tomorrow Night 深色主题 */
+@import "prismjs/themes/prism-tomorrow.css";
 
 :root {
   font-family: 'JetBrains Mono', 'Fira Code', Consolas, monospace;
