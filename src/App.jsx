@@ -5,6 +5,8 @@ import 'prismjs/components/prism-json';
 import 'prismjs/components/prism-yaml';
 import 'prismjs/components/prism-sql';
 import { ArrowRightLeft, Copy, Check, FileJson, Database, FileCode, Github } from 'lucide-react';
+import JsonView from '@uiw/react-json-view'; // ✅ 新库
+import { vscodeTheme } from '@uiw/react-json-view/vscode'; // ✅ 引入 VSCode 风格主题
 import { jsonToYaml, yamlToJson, jsonToSql } from './utils';
 
 // 默认示例数据
@@ -18,14 +20,25 @@ function App() {
   const [output, setOutput] = useState('');
   const [mode, setMode] = useState('JSON_TO_YAML'); // 'JSON_TO_YAML' | 'YAML_TO_JSON' | 'JSON_TO_SQL'
   const [copied, setCopied] = useState(false);
+  const [jsonViewData, setJsonViewData] = useState(null); // 用于 JSON 可视化模式
 
   // 核心转换 Effect
   useEffect(() => {
     let res = '';
-    if (mode === 'JSON_TO_YAML') res = jsonToYaml(input);
-    if (mode === 'YAML_TO_JSON') res = yamlToJson(input);
-    if (mode === 'JSON_TO_SQL') res = jsonToSql(input);
-    setOutput(res);
+    try {
+      if (mode === 'JSON_TO_YAML') {
+        res = jsonToYaml(input);
+      } else if (mode === 'YAML_TO_JSON') {
+        res = yamlToJson(input);
+        // 尝试解析为对象以供视图展示
+        try { setJsonViewData(JSON.parse(res)); } catch(e) { setJsonViewData(null); }
+      } else if (mode === 'JSON_TO_SQL') {
+        res = jsonToSql(input);
+      }
+      setOutput(res);
+    } catch (e) {
+      setOutput(e.message);
+    }
   }, [input, mode]);
 
   const handleCopy = () => {
@@ -63,7 +76,13 @@ function App() {
           ].map(m => (
             <button
               key={m.id}
-              onClick={() => { setMode(m.id); setInput(m.id === 'YAML_TO_JSON' ? output : input); }} // 简单切换逻辑
+              onClick={() => { 
+                setMode(m.id); 
+                // 切换模式时，尝试把 output 作为下一次的 input (如果格式兼容)
+                if (output && !output.startsWith('Error') && !output.startsWith('--')) {
+                   setInput(output);
+                }
+              }} 
               className={`flex items-center gap-2 px-4 py-1.5 rounded-md text-sm font-medium transition-all ${
                 mode === m.id 
                   ? 'bg-slate-700 text-white shadow-sm' 
@@ -109,30 +128,46 @@ function App() {
         <div className="flex-1 flex flex-col bg-slate-900/30 min-w-0">
           <div className="h-10 bg-slate-900/50 border-b border-slate-800 flex items-center justify-between px-4 text-xs font-mono text-slate-500 uppercase tracking-wider">
             <span>Output ({mode.split('_')[2]})</span>
-            <button 
-              onClick={handleCopy}
-              className={`flex items-center gap-1.5 px-3 py-1 rounded transition-colors ${
-                copied ? 'text-green-400 bg-green-500/10' : 'text-slate-400 hover:text-white hover:bg-slate-800'
-              }`}
-            >
-              {copied ? <Check size={12} /> : <Copy size={12} />}
-              {copied ? 'Copied' : 'Copy'}
-            </button>
+            <div className="flex gap-2">
+               {/* 只有在 YAML 转 JSON 模式下才显示 Tree View 开关，这里默认只要是 JSON 结果都可以在下方展示树状图 */}
+               <button 
+                onClick={handleCopy}
+                className={`flex items-center gap-1.5 px-3 py-1 rounded transition-colors ${
+                  copied ? 'text-green-400 bg-green-500/10' : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                }`}
+              >
+                {copied ? <Check size={12} /> : <Copy size={12} />}
+                {copied ? 'Copied' : 'Copy'}
+              </button>
+            </div>
           </div>
+          
           <div className="flex-1 overflow-auto relative">
-             <Editor
-              value={output}
-              onValueChange={() => {}} // ReadOnly
-              highlight={code => highlight(code, getOutputLang() || languages.text)}
-              padding={24}
-              className="font-mono text-sm min-h-full"
-              style={{
-                fontFamily: '"JetBrains Mono", "Fira Code", monospace',
-                fontSize: 14,
-                opacity: 0.8 // 稍微暗一点表示只读
-              }}
-              readOnly
-            />
+             {/* 如果模式产生的是 JSON (YAML -> JSON)，我们可以额外展示一个树状视图 */}
+             {mode === 'YAML_TO_JSON' && jsonViewData ? (
+               <div className="p-6">
+                 <JsonView 
+                    value={jsonViewData} 
+                    style={vscodeTheme} 
+                    displayDataTypes={false} 
+                    shortenTextAfterLength={50}
+                 />
+               </div>
+             ) : (
+               <Editor
+                value={output}
+                onValueChange={() => {}} // ReadOnly
+                highlight={code => highlight(code, getOutputLang() || languages.text)}
+                padding={24}
+                className="font-mono text-sm min-h-full"
+                style={{
+                  fontFamily: '"JetBrains Mono", "Fira Code", monospace',
+                  fontSize: 14,
+                  opacity: 0.8 
+                }}
+                readOnly
+              />
+             )}
           </div>
         </div>
 
