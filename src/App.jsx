@@ -1,210 +1,157 @@
 import { useState, useEffect } from 'react';
-import Editor from 'react-simple-code-editor';
+import yaml from 'js-yaml';
+import { objectToSql } from './utils';
+import { 
+  FileJson, Database, FileCode, Copy, Check, RotateCcw, Zap
+} from 'lucide-react';
 
-// ✅ 稳健的 Prism 引入：直接引入主包，避免插件加载顺序问题
-import Prism from 'prismjs';
-import 'prismjs/themes/prism-tomorrow.css'; // 确保样式被引入
-import 'prismjs/components/prism-clike';
-import 'prismjs/components/prism-javascript';
-import 'prismjs/components/prism-json';
-import 'prismjs/components/prism-yaml';
-import 'prismjs/components/prism-sql';
-
-// ❌ 移除 lucide-react，改用 Emoji，排除组件库兼容性问题
-// import { ArrowRightLeft, ... } from 'lucide-react';
-
-import JsonView from '@uiw/react-json-view';
-import { vscodeTheme } from '@uiw/react-json-view/vscode';
-import { jsonToYaml, yamlToJson, jsonToSql } from './utils';
-
-// 默认示例数据
-const DEFAULT_JSON = JSON.stringify([
-  { id: 1, name: "Alice", role: "Admin", active: true },
-  { id: 2, name: "Bob", role: "User", active: false }
-], null, 2);
-
-// 安全高亮函数
-const safeHighlight = (code, lang) => {
-  if (!code) return '';
-  // 防御性获取语法
-  const grammar = Prism.languages[lang] || Prism.languages.javascript || Prism.languages.clike;
-  if (!grammar) return code;
-  return Prism.highlight(code, grammar, lang);
-};
+// 初始数据
+const INITIAL_DATA = [
+  { id: 1, name: "Alice", role: "Admin" },
+  { id: 2, name: "Bob", role: "User" }
+];
 
 function App() {
-  const [input, setInput] = useState(DEFAULT_JSON);
-  const [output, setOutput] = useState('');
-  const [mode, setMode] = useState('JSON_TO_YAML');
-  const [copied, setCopied] = useState(false);
-  const [jsonViewData, setJsonViewData] = useState(null);
+  // 1. 当前编辑器里的文本
+  const [content, setContent] = useState(JSON.stringify(INITIAL_DATA, null, 2));
+  // 2. 当前模式
+  const [format, setFormat] = useState('JSON');
+  // 3. 后台缓存的“最后一次正确的数据” (Single Source of Truth)
+  const [cachedData, setCachedData] = useState(INITIAL_DATA);
+  
+  const [msg, setMsg] = useState('');
 
-  useEffect(() => {
-    let res = '';
+  // 🔴 核心逻辑：每当内容变化，尝试解析并更新缓存
+  const handleEditorChange = (val) => {
+    setContent(val);
     try {
-      if (mode === 'JSON_TO_YAML') {
-        res = jsonToYaml(input);
-      } else if (mode === 'YAML_TO_JSON') {
-        res = yamlToJson(input);
-        try { 
-          const parsed = JSON.parse(res);
-          setJsonViewData(typeof parsed === 'object' ? parsed : null); 
-        } catch(e) { 
-          setJsonViewData(null); 
-        }
-      } else if (mode === 'JSON_TO_SQL') {
-        res = jsonToSql(input);
+      let parsed = null;
+      if (format === 'JSON') parsed = JSON.parse(val);
+      if (format === 'YAML') parsed = yaml.load(val);
+      
+      // SQL 模式下，通常很难解析回对象，所以我们不更新缓存
+      // 这意味着用户在 SQL 模式下的修改是“只读/临时”的
+      // 一旦切换走，就会丢弃 SQL 的修改，恢复到 last valid state
+      
+      if (parsed && typeof parsed === 'object') {
+        setCachedData(parsed);
       }
-      // 再次强制转为字符串，确保万无一失
-      setOutput(String(res || ''));
     } catch (e) {
-      setOutput(`Error: ${e.message}`);
+      // 解析失败，只需静默，保持 cachedData 不变（停留在上一个正确版本）
     }
-  }, [input, mode]);
+  };
+
+  // 🔵 核心逻辑：切换模式
+  const switchFormat = (targetFormat) => {
+    if (format === targetFormat) return;
+
+    // 尝试生成目标代码
+    let newContent = '';
+    try {
+      // 总是使用 cachedData 来生成，这就实现了“自动修正/回退到正常状态”
+      if (targetFormat === 'JSON') {
+        newContent = JSON.stringify(cachedData, null, 2);
+      } else if (targetFormat === 'YAML') {
+        newContent = yaml.dump(cachedData);
+      } else if (targetFormat === 'SQL') {
+        newContent = objectToSql(cachedData);
+      }
+      
+      // 切换成功
+      setContent(newContent);
+      setFormat(targetFormat);
+      setMsg(`Switched to ${targetFormat}`);
+      setTimeout(() => setMsg(''), 1500);
+
+    } catch (e) {
+      setMsg('Error converting!');
+    }
+  };
 
   const handleCopy = () => {
-    navigator.clipboard.writeText(output);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    navigator.clipboard.writeText(content);
+    setMsg('Copied!');
+    setTimeout(() => setMsg(''), 2000);
   };
 
-  const getInputLangKey = () => mode === 'YAML_TO_JSON' ? 'yaml' : 'json';
-  const getOutputLangKey = () => {
-    if (mode === 'YAML_TO_JSON') return 'json';
-    if (mode === 'JSON_TO_SQL') return 'sql';
-    return 'yaml';
-  };
-
-  // 按钮样式
-  const getBtnClass = (active) => `flex items-center gap-2 px-4 py-1.5 rounded-md text-sm font-medium transition-all ${
-    active ? 'bg-slate-700 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
-  }`;
-
-  // 切换逻辑
-  const handleModeChange = (newMode) => {
-    setMode(newMode);
-    if (output && !output.startsWith('Error') && !output.startsWith('--')) {
-      setInput(output);
-    }
-  };
+  // 样式辅助
+  const getTabStyle = (target) => `
+    flex items-center gap-2 px-4 py-2 rounded-t-lg text-sm font-bold transition-all border-t border-x border-transparent
+    ${format === target 
+      ? 'bg-slate-900 text-blue-400 border-slate-800 border-b-slate-900 translate-y-[1px] z-10' 
+      : 'bg-slate-950 text-slate-500 hover:text-slate-300 hover:bg-slate-900/50'}
+  `;
 
   return (
-    <div className="h-screen flex flex-col bg-slate-950 font-sans text-slate-300">
+    <div className="h-screen bg-slate-950 text-slate-300 font-sans flex flex-col items-center py-10">
       
-      {/* 顶部导航栏 */}
-      <header className="h-16 border-b border-slate-800 flex items-center justify-between px-6 bg-slate-900/50 backdrop-blur-md">
-        <div className="flex items-center gap-3">
-          <div className="bg-blue-600 p-2 rounded-lg text-white shadow-lg shadow-blue-500/20">
-            {/* 使用 Emoji 替代图标 */}
-            <span className="text-xl">🔄</span>
-          </div>
-          <h1 className="font-bold text-lg text-slate-100 tracking-tight">Data Morph</h1>
-        </div>
-
-        {/* 模式切换按钮 */}
-        <div className="flex bg-slate-900 p-1 rounded-lg border border-slate-800">
-          <button
-            onClick={() => handleModeChange('JSON_TO_YAML')}
-            className={getBtnClass(mode === 'JSON_TO_YAML')}
-          >
-            <span className="text-base">📝</span> JSON ⭢ YAML
-          </button>
-          
-          <button
-            onClick={() => handleModeChange('YAML_TO_JSON')}
-            className={getBtnClass(mode === 'YAML_TO_JSON')}
-          >
-            <span className="text-base">📄</span> YAML ⭢ JSON
-          </button>
-          
-          <button
-            onClick={() => handleModeChange('JSON_TO_SQL')}
-            className={getBtnClass(mode === 'JSON_TO_SQL')}
-          >
-            <span className="text-base">🗄️</span> JSON ⭢ SQL
-          </button>
-        </div>
-
-        <a href="https://github.com/xingchengzhu" target="_blank" className="text-slate-500 hover:text-white transition-colors text-xl">
-          🐱
-        </a>
-      </header>
-
-      {/* 主内容区 */}
-      <div className="flex-1 flex overflow-hidden">
+      <div className="w-full max-w-4xl flex flex-col h-full px-6">
         
-        {/* 左侧：输入区 */}
-        <div className="flex-1 flex flex-col border-r border-slate-800 min-w-0">
-          <div className="h-10 bg-slate-900 border-b border-slate-800 flex items-center justify-between px-4 text-xs font-mono text-slate-500 uppercase tracking-wider">
-            <span>Input ({mode.split('_')[0]})</span>
-            <span className="text-blue-400">Editable</span>
-          </div>
-          <div className="flex-1 overflow-auto bg-slate-950 relative group">
-            <Editor
-              value={String(input)}
-              onValueChange={setInput}
-              highlight={code => safeHighlight(code, getInputLangKey())}
-              padding={24}
-              className="font-mono text-sm min-h-full"
-              textareaClassName="focus:outline-none"
-              style={{
-                fontFamily: '"JetBrains Mono", "Fira Code", monospace',
-                fontSize: 14,
-              }}
-            />
-          </div>
-        </div>
-
-        {/* 右侧：输出区 */}
-        <div className="flex-1 flex flex-col bg-slate-900/30 min-w-0">
-          <div className="h-10 bg-slate-900/50 border-b border-slate-800 flex items-center justify-between px-4 text-xs font-mono text-slate-500 uppercase tracking-wider">
-            <span>Output ({mode.split('_')[2]})</span>
-            <button 
-              onClick={handleCopy}
-              className={`flex items-center gap-1.5 px-3 py-1 rounded transition-colors ${
-                copied ? 'text-green-400 bg-green-500/10' : 'text-slate-400 hover:text-white hover:bg-slate-800'
-              }`}
-            >
-              <span>{copied ? '✅' : '📋'}</span>
-              {copied ? 'Copied' : 'Copy'}
-            </button>
+        {/* Header */}
+        <div className="flex items-center justify-between mb-8">
+          <div className="flex items-center gap-3">
+            <div className="bg-blue-600 p-2.5 rounded-xl shadow-lg shadow-blue-500/20 text-white">
+              <Zap size={24} fill="currentColor" />
+            </div>
+            <div>
+              <h1 className="font-bold text-2xl text-white tracking-tight">Data Morph</h1>
+              <p className="text-xs text-slate-500 font-mono">Single-Editor Converter</p>
+            </div>
           </div>
           
-          <div className="flex-1 overflow-auto relative">
-             {/* 仅在 YAML 转 JSON 且解析成功时显示树状图 */}
-             {mode === 'YAML_TO_JSON' && jsonViewData ? (
-               <div className="p-6">
-                 <JsonView 
-                    value={jsonViewData} 
-                    style={vscodeTheme} 
-                    displayDataTypes={false} 
-                    shortenTextAfterLength={50}
-                 />
-               </div>
-             ) : (
-               <Editor
-                value={String(output)}
-                onValueChange={() => {}} 
-                highlight={code => safeHighlight(code, getOutputLangKey())}
-                padding={24}
-                className="font-mono text-sm min-h-full"
-                style={{
-                  fontFamily: '"JetBrains Mono", "Fira Code", monospace',
-                  fontSize: 14,
-                  opacity: 0.8 
-                }}
-                readOnly
-              />
-             )}
-          </div>
+          {msg && (
+            <div className="bg-blue-500/10 text-blue-400 px-4 py-1.5 rounded-full text-xs font-bold animate-fade-in flex items-center gap-2">
+              <Check size={12} /> {msg}
+            </div>
+          )}
         </div>
 
-      </div>
-      
-      {/* 底部状态栏 */}
-      <div className="h-6 bg-blue-600 text-white text-[10px] flex items-center justify-between px-4 font-mono">
-        <span>Ready</span>
-        <span>Ln {String(input).split('\n').length}, Col 1</span>
+        {/* Tabs */}
+        <div className="flex items-end border-b border-slate-800 w-full pl-2 select-none">
+          <button onClick={() => switchFormat('JSON')} className={getTabStyle('JSON')}>
+            <FileCode size={16} /> JSON
+          </button>
+          <button onClick={() => switchFormat('YAML')} className={getTabStyle('YAML')}>
+            <FileJson size={16} /> YAML
+          </button>
+          <button onClick={() => switchFormat('SQL')} className={getTabStyle('SQL')}>
+            <Database size={16} /> SQL
+          </button>
+          
+          <div className="flex-1"></div>
+          
+          <button 
+            onClick={handleCopy} 
+            className="flex items-center gap-2 text-xs text-slate-500 hover:text-white mb-2 transition-colors px-2"
+          >
+            <Copy size={14} /> Copy Content
+          </button>
+        </div>
+
+        {/* Editor Area */}
+        <div className="flex-1 bg-slate-900 rounded-b-xl rounded-tr-xl border border-slate-800 shadow-2xl overflow-hidden flex flex-col relative">
+          
+          {/* 状态指示条 */}
+          <div className="h-1 w-full bg-slate-800">
+             <div className={`h-full transition-all duration-300 ${
+               format === 'JSON' ? 'w-1/3 bg-yellow-500' : 
+               format === 'YAML' ? 'w-1/3 ml-[33%] bg-purple-500' : 
+               'w-1/3 ml-[66%] bg-blue-500'
+             }`}></div>
+          </div>
+
+          <textarea
+            value={content}
+            onChange={(e) => handleEditorChange(e.target.value)}
+            className="flex-1 bg-transparent p-8 resize-none outline-none text-sm font-mono leading-relaxed text-slate-300 placeholder-slate-700 custom-scrollbar"
+            spellCheck="false"
+          />
+
+          {/* 提示信息 */}
+          <div className="absolute bottom-4 right-6 text-[10px] text-slate-600 font-mono pointer-events-none">
+             {format === 'SQL' ? '⚠️ SQL edits are temporary (Read-only mode)' : '✅ Auto-saving valid state...'}
+          </div>
+        </div>
       </div>
     </div>
   );

@@ -1,44 +1,45 @@
 <div align="center">
 
-  # 🔄 Data Morph
+  # ⚡ Data Morph
   
-  **The missing converter for developers. JSON, YAML, SQL in one place.**
+  **The smart, single-editor data converter. Switch tabs, convert instantly.**
   <br>
-  **开发者专属的数据格式转换工厂。支持 JSON/YAML/SQL 实时互转。**
+  **极简的智能数据转换器。一个编辑器，三种格式，切换即转换。**
 
   [![React](https://img.shields.io/badge/Made%20with-React-61DAFB?style=flat-square&logo=react)](https://react.dev)
   [![Tailwind](https://img.shields.io/badge/Styled%20with-Tailwind%20v4-38B2AC?style=flat-square&logo=tailwind-css)](https://tailwindcss.com)
   
-  [**🚀 Live Demo / 在线使用**](https://data-morph.vercel.app)
+  [**🚀 Live Demo / 在线使用**](https://data-morph-omega.vercel.app)
   
-  <br>
 </div>
 
 ---
 
-![App Screenshot](public/screenshot.png)
+![App Screenshot](public/screenshot1.png)
+![App Screenshot](public/screenshot2.png)
+![App Screenshot](public/screenshot3.png)
 
 ## 📖 Introduction
 
-**Data Morph** solves the daily headache of converting data formats. 
-Whether you need to turn a backend API response (JSON) into a Kubernetes config (YAML), or generate SQL Insert statements from a dataset, Data Morph handles it instantly in your browser.
+**Data Morph** is a minimalist tool designed for developers who need to switch between data formats fast. 
 
-**Data Morph** 解决了开发者日常的数据格式转换痛点。无论你是要将 API 响应转为 K8s 配置，还是将 JSON 数据生成 SQL 插入语句，它都能在浏览器中瞬间完成。
+Unlike traditional "Split View" converters, Data Morph uses a **"Single Source of Truth"** architecture. It intelligently caches your last valid data object. This means you can switch from JSON to YAML, mess up the YAML, and switch back to JSON—it will automatically fix itself using the cached data.
+
+**Data Morph** 摒弃了传统的“左右对照”模式，采用“单一编辑器”设计。它在后台智能缓存最后一次有效的数据结构，支持在 JSON、YAML 和 SQL 之间无缝切换。即使你在某种格式下输入了错误代码，切回其他格式时也能自动恢复，实现“自动纠错”。
 
 ## ⚡ Features
 
-* **⚡ Real-time Conversion:** Type on the left, see results on the right instantly.
-* **🎨 Syntax Highlighting:** Powered by PrismJS for a full IDE-like experience.
-* **🛡️ Local Processing:** All data conversion happens in your browser. zero latency, 100% privacy.
-* **🔁 Multi-Format:** * JSON ⭢ YAML
-    * YAML ⭢ JSON
-    * JSON ⭢ SQL (Table Schema + Insert)
+* **🧠 Smart Context Switching:** Just click a tab (JSON/YAML/SQL) to convert the current content instantly.
+* **🛡️ Auto-Correction:** Messed up your YAML? Switching tabs automatically regenerates code from the last valid state.
+* **🔒 Read-Only SQL:** Generates `CREATE TABLE` and `INSERT` statements automatically from your data.
+* **🌑 Zen Mode:** A distraction-free, dark-themed interface focused on your code.
+* **⚡ Local Processing:** Zero latency, 100% privacy. All conversions happen in your browser.
 
 ## 📦 Getting Started
 
 1.  **Clone the repository**
     ```bash
-    git clone https://github.com/xingchengzhu/data-morph.git
+    git clone [https://github.com/xingchengzhu/data-morph.git](https://github.com/xingchengzhu/data-morph.git)
     cd data-morph
     ```
 
@@ -56,8 +57,8 @@ Whether you need to turn a backend API response (JSON) into a Kubernetes config 
 
 * **Framework:** React 19 + Vite
 * **Styling:** Tailwind CSS v4
-* **Core Logic:** `js-yaml`
-* **Editor:** `react-simple-code-editor` + `prismjs`
+* **Core Logic:** `js-yaml` for parsing and dumping
+* **Icons:** Lucide React
 
 ## 📄 License
 
