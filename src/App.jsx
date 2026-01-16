@@ -1,12 +1,15 @@
 import { useState, useEffect } from 'react';
 import Editor from 'react-simple-code-editor';
-import { highlight, languages } from 'prismjs/components/prism-core';
+
+// 🔴 修复核心：改用标准方式引入 Prism，防止运行时崩溃
+import Prism from 'prismjs';
 import 'prismjs/components/prism-json';
 import 'prismjs/components/prism-yaml';
 import 'prismjs/components/prism-sql';
+
 import { ArrowRightLeft, Copy, Check, FileJson, Database, FileCode, Github } from 'lucide-react';
-import JsonView from '@uiw/react-json-view'; // ✅ 新库
-import { vscodeTheme } from '@uiw/react-json-view/vscode'; // ✅ 引入 VSCode 风格主题
+import JsonView from '@uiw/react-json-view';
+import { vscodeTheme } from '@uiw/react-json-view/vscode';
 import { jsonToYaml, yamlToJson, jsonToSql } from './utils';
 
 // 默认示例数据
@@ -20,7 +23,7 @@ function App() {
   const [output, setOutput] = useState('');
   const [mode, setMode] = useState('JSON_TO_YAML'); // 'JSON_TO_YAML' | 'YAML_TO_JSON' | 'JSON_TO_SQL'
   const [copied, setCopied] = useState(false);
-  const [jsonViewData, setJsonViewData] = useState(null); // 用于 JSON 可视化模式
+  const [jsonViewData, setJsonViewData] = useState(null);
 
   // 核心转换 Effect
   useEffect(() => {
@@ -30,7 +33,6 @@ function App() {
         res = jsonToYaml(input);
       } else if (mode === 'YAML_TO_JSON') {
         res = yamlToJson(input);
-        // 尝试解析为对象以供视图展示
         try { setJsonViewData(JSON.parse(res)); } catch(e) { setJsonViewData(null); }
       } else if (mode === 'JSON_TO_SQL') {
         res = jsonToSql(input);
@@ -47,12 +49,12 @@ function App() {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  // 根据模式获取编辑器语言配置
-  const getInputLang = () => mode === 'YAML_TO_JSON' ? languages.yaml : languages.json;
+  // 🔴 修复：使用 Prism.languages
+  const getInputLang = () => mode === 'YAML_TO_JSON' ? Prism.languages.yaml : Prism.languages.json;
   const getOutputLang = () => {
-    if (mode === 'YAML_TO_JSON') return languages.json;
-    if (mode === 'JSON_TO_SQL') return languages.sql;
-    return languages.yaml;
+    if (mode === 'YAML_TO_JSON') return Prism.languages.json;
+    if (mode === 'JSON_TO_SQL') return Prism.languages.sql;
+    return Prism.languages.yaml;
   };
 
   return (
@@ -78,7 +80,6 @@ function App() {
               key={m.id}
               onClick={() => { 
                 setMode(m.id); 
-                // 切换模式时，尝试把 output 作为下一次的 input (如果格式兼容)
                 if (output && !output.startsWith('Error') && !output.startsWith('--')) {
                    setInput(output);
                 }
@@ -112,7 +113,8 @@ function App() {
             <Editor
               value={input}
               onValueChange={setInput}
-              highlight={code => highlight(code, getInputLang() || languages.text)}
+              // 🔴 修复：使用 Prism.highlight
+              highlight={code => Prism.highlight(code, getInputLang() || Prism.languages.text, 'text')}
               padding={24}
               className="font-mono text-sm min-h-full"
               textareaClassName="focus:outline-none"
@@ -129,7 +131,6 @@ function App() {
           <div className="h-10 bg-slate-900/50 border-b border-slate-800 flex items-center justify-between px-4 text-xs font-mono text-slate-500 uppercase tracking-wider">
             <span>Output ({mode.split('_')[2]})</span>
             <div className="flex gap-2">
-               {/* 只有在 YAML 转 JSON 模式下才显示 Tree View 开关，这里默认只要是 JSON 结果都可以在下方展示树状图 */}
                <button 
                 onClick={handleCopy}
                 className={`flex items-center gap-1.5 px-3 py-1 rounded transition-colors ${
@@ -143,7 +144,6 @@ function App() {
           </div>
           
           <div className="flex-1 overflow-auto relative">
-             {/* 如果模式产生的是 JSON (YAML -> JSON)，我们可以额外展示一个树状视图 */}
              {mode === 'YAML_TO_JSON' && jsonViewData ? (
                <div className="p-6">
                  <JsonView 
@@ -156,8 +156,9 @@ function App() {
              ) : (
                <Editor
                 value={output}
-                onValueChange={() => {}} // ReadOnly
-                highlight={code => highlight(code, getOutputLang() || languages.text)}
+                onValueChange={() => {}} 
+                // 🔴 修复：使用 Prism.highlight
+                highlight={code => Prism.highlight(code, getOutputLang() || Prism.languages.text, 'text')}
                 padding={24}
                 className="font-mono text-sm min-h-full"
                 style={{
